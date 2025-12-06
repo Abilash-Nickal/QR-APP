@@ -1,1 +1,1 @@
-web: gunicorn QR_APP:app
+web: gunicorn app:app
