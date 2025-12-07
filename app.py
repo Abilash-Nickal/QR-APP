@@ -1489,7 +1489,5 @@ def bg():
 # ----------------------------------------------------------------------------------------------------
 
 # For web deployment:
-if __name__ == "__main__":
-    # The host/port will be set by the deployment environment, 
-    # but keep it like this for local testing before deployment
+if __name__ == "__main__": 
     app.run(debug=True)
