@@ -5,6 +5,7 @@ import urllib.parse
 from flask import Flask, request, render_template_string, send_file
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
+import pyzbar.pyzbar as pyzbar
 
 # --- Flask App Setup ---
 app = Flask(__name__)
@@ -78,7 +79,7 @@ def add_custom_graphics(qr_img: Image.Image, custom_text="") -> Image.Image:
 
 # --- URL Builder ---
 def generate_target_url(d):
-    base = "https://abilash-nickal.github.io/QR-cod-generator/my_detail_moder_UI.html"
+    base = "https://abilash-nickal.github.io/qrgen/qrdetail.html"
     params = {
         "name": d.get("name", ""),
         "msg": d.get("message", ""),
@@ -107,19 +108,13 @@ HTML_TEMPLATE = """
 <script type="module" src="https://unpkg.com/@splinetool/viewer@1.12.6/build/spline-viewer.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
 :root{
   --glass-bg: rgba(255,255,255,0.06);
   --glass-border: rgba(255,255,255,0.12);
   --accent: #4f46e5;
 }
-html,body{height:100%;
-    font-family:Inter,sans-serif;
-    color:#031220;display:flex;
-    align-items:center;
-    justify-content:center;
-    background:#080338;
-    overflow:hidden;}
 spline-viewer {
     position: fixed; /* Fixes it to the viewport */
     top: 0;
@@ -135,13 +130,166 @@ border:1px solid var(--glass-border);backdrop-filter:
 blur(14px) saturate(120%);
 -webkit-backdrop-filter:blur(14px) saturate(120%);
 box-shadow:0 10px 40px rgba(0, 0, 0, 0.6);
-border-radius:20px;padding:24px;}
+border-radius:20px;padding:24px;z-index:10;position:relative;}
 .label{color:rgba(220,230,245,0.95);font-weight:600;margin-bottom:6px;display:block;}
 .input, .select {
   width:100%; padding:10px 12px; border-radius:10px; background:transparent; border:1px solid rgba(255,255,255,0.06);
   color: #e6eef8; outline:none;
 }
+ * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: 'Inter', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            background-color: #050505;
+            color: white;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gradient-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -100;
+            overflow: hidden;
+        }
+
+        .gradient-sphere {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+        }
+
+        .sphere-1 {
+            width: 40vw;
+            height: 40vw;
+            background: linear-gradient(240deg, rgba(72, 0, 255, 0.8), rgba(0, 183, 255, 0.4));
+            top: -10%;
+            left: -10%;
+            animation: float-1 15s ease-in-out infinite alternate;
+        }
+
+        .sphere-2 {
+            width: 45vw;
+            height: 45vw;
+            background:linear-gradient(40deg, rgba(255, 0, 128, 0.8), rgba(255, 102, 0, 0.4)); 
+            bottom: -20%;
+            right: -10%;
+            animation: float-2 18s ease-in-out infinite alternate;
+        }
+
+        .sphere-3 {
+            width: 30vw;
+            height: 30vw;
+            background: linear-gradient(120deg, rgba(133, 89, 255, 0.5), rgba(98, 216, 249, 0.3));
+            top: 60%;
+            left: 20%;
+            animation: float-3 20s ease-in-out infinite alternate;
+        }
+
+        .noise-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.05;
+            z-index: 5;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        @keyframes float-1 {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+            100% {
+                transform: translate(10%, 10%) scale(1.1);
+            }
+        }
+
+        @keyframes float-2 {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+            100% {
+                transform: translate(-10%, -5%) scale(1.15);
+            }
+        }
+
+        @keyframes float-3 {
+            0% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.3;
+            }
+            100% {
+                transform: translate(-5%, 10%) scale(1.05);
+                opacity: 0.6;
+            }
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            z-index: 10;
+        }
+
+        .glow {
+            position: absolute;
+            width: 40vw;
+            height: 40vh;
+            background: radial-gradient(circle, rgba(72, 0, 255, 0.15), transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            animation: pulse 8s infinite alternate;
+            filter: blur(30px);
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.3;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+            100% {
+                opacity: 0.7;
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+        }
+
+        .particles-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+        }
 .h1 {
 font-family: 'Poppins', sans-serif;
 font-size:80px;
@@ -157,11 +305,14 @@ h2 {
 font-family: 'Poppins', sans-serif;
 color:white;
 }
+
 /* --- Base Styles (Provided) --- */
-.btn-primary{background:linear-gradient(90deg,var(--accent),#6d28d9);border:none;color:white;padding:12px;border-radius:10px;}
-.btn-download{background:linear-gradient(90deg,#059669,#10b981);color:white;padding:10px;border-radius:10px;box-shadow:0 6px 18px rgba(16,185,129,0.18);margin-right: 10px;}
+.btn-primary{background:linear-gradient(90deg, #03a9f4, #f441a5);border:none;color:white;padding:12px;border-radius:10px;}
+.btn-download{background:linear-gradient(90deg, #03a9f4, #f441a5);color:white;padding:10px;border-radius:10px;box-shadow:0 6px 18px rgba(16,185,129,0.18);margin-right: 10px;}
+
 .btn-link{
-    background:linear-gradient(90deg,#3b82f6,#2563eb);
+    background: linear-gradient(90deg, #03a9f4, #f441a5, #ffeb3b, #03a9f4);
+    background-size: 400%;
     color:white;
     padding:10px;
     border-radius:10px;
@@ -179,19 +330,20 @@ color:white;
 }
 /* --- Hover Styles with Glow Added --- */
 .btn-link:hover {
-    background: gold;
-    color: black;
-    /* ADDED: Box shadow for the glow effect */
-    box-shadow: 0 0 15px gold; 
-    /* ADDED: Optional: Smooth transition for the effect */
-    transition: box-shadow 0.3s ease; 
+    color: #fff;
+    background-color: var(--glow_color);
+    border-color: var(--glow_color);
+    text-shadow: 0 0 50px white, 0 0 20px white, 0 0 15px white;
+    box-shadow: 0 0 50px var(--glow_color), 0 0 30px var(--glow_color), 0 0 60px var(--glow_color), 0 0 120px var(--glow_color);
+    letter-spacing: 1.5px;
+    font-size: 17px;
     
 }
 .btn-primary:hover {
-    background: gold;
+    background: white;
     color: black;
     /* ADDED: Box shadow for the glow effect */
-    box-shadow: 0 0 15px gold; 
+    box-shadow: 0 0 15px white; 
     /* ADDED: Optional: Smooth transition for the effect */
     transition: box-shadow 0.3s ease; 
 }
@@ -236,6 +388,7 @@ select{
 select option{
   background:#1e293b;
   color:white;
+  padding:80px;
 }
 .modal-backdrop{
   position:fixed;
@@ -311,20 +464,23 @@ select option{
 </div>
 <spline-viewer loading-anim-type="none" url="https://prod.spline.design/UK2sM5JyhHbgUGpr/scene.splinecode"></spline-viewer>
 <div class="glass w-full max-w-4xl">
-  <h2 class="text-2xl font-extrabold mb-4">QR Code Data Encoder</h2>
-  <div class="grid md:grid-cols-2 gap-6">
+  <div style="margin-bottom:16px; margin-top:20px;">
+    <h2 id="pageTitle" class="text-2xl font-extrabold">QR Code Data Encoder</h2>
+  </div>
+  <div id="genMode">
+    <div class="grid md:grid-cols-2 gap-6">
     <div>
       <form id="qrForm" method="POST" action="/generate_qr" enctype="multipart/form-data" class="space-y-5">
         <!-- Name -->
         <div>
           <label class="label">Name</label>
-          <input class="input" type="text" name="name" required value="{{ saved_data.name }}">
+          <input class="input" type="text" name="name" placeholder="Enter your name EX: Abilash Nickal" required value="{{ saved_data.name }}">
         </div>
 
         <!-- Message -->
         <div>
-          <label class="label">Message</label>
-          <input class="input" type="text" name="message" value="{{ saved_data.message }}">
+          <label class="label" >Message</label>
+          <input class="input" type="text" name="message" placeholder="custom Short massage hading Ex:Bank NO " value="{{ saved_data.message }}">
         </div>
 
         <!-- Platform 1 -->
@@ -424,13 +580,13 @@ select option{
         <!-- Image URL -->
         <div>
           <label class="label">Image URL</label>
-          <input class="input" type="url" name="image_url" value="{{ saved_data.image_url }}">
+          <input class="input" type="url" name="image_url" placeholder="Enter image URL" value="{{ saved_data.image_url }}">
         </div>
 
         <!-- Text/Key to Copy -->
         <div>
           <label class="label">Text/Key to Copy</label>
-          <input class="input" type="text" name="text_key" value="{{ saved_data.get('text_key', '') }}">
+          <input class="input" type="text" name="text_key"  placeholder="Ex: WIFI 12345" value="{{ saved_data.get('text_key', '') }}">
         </div>
 
         <!-- Hidden QR options (box size and error) -->
@@ -438,6 +594,7 @@ select option{
         <input type="hidden" id="error_level_field" name="error_level" value="">
 
         <button type="submit" class="btn-primary w-full">Generate QR</button>
+       <button type="button" id="toggleBtn" class="btn-primary w-full" onclick="toggleReadMode()" style="margin-top:10px;">Read QR Code</button>
       </form>
     </div>
 
@@ -455,10 +612,59 @@ select option{
             Download QR Code (PNG)
          </a>
       {% endif %}
+      {% if qr_read_data %}
+      <div class="url-box">{{ qr_read_data }}</div>
+      {% endif %}
     </div>
      <!-- three-dot menu overlay -->
         <div id="threeDots" class="three-dots" title="Customize QR">Customize QR ⋮</div>
 
+    </div>
+  </div>
+
+  <!-- QR Reader Section -->
+  <div id="readMode" class="hidden">
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <div class="mb-4">
+          <button onclick="startCamera()" class="btn-primary">Use Camera</button>
+          <button onclick="toggleUpload()" class="small-btn ml-2">Upload Image</button>
+        </div>
+        <!-- Camera Reader -->
+        <div id="cameraSection" class="hidden">
+          <video id="video" width="320" height="240" autoplay></video>
+          <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+          <button onclick="stopCamera()" class="small-btn mt-2">Stop Camera</button>
+        </div>
+        <!-- Upload Reader -->
+        <div id="uploadSection">
+          <form id="readForm" method="POST" action="/read_qr" enctype="multipart/form-data">
+            <input type="file" name="file" accept="image/*" required class="w-full">
+            <button type="submit" class="btn-primary mt-3 w-full">Read QR Code</button>
+          </form>
+        </div>
+        <div style="margin-top:20px;"> 
+          <button type="button" class="btn-primary w-full" onclick="toggleReadMode()">Back to Generator</button>
+        </div>
+      </div>     
+      </div>
+
+      <div class="flex flex-col items-center">
+        <div style="width: 320px; height: 240px; border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border-radius: 12px;">
+          {% if qr_read_image %}
+            <img src="data:image/png;base64,{{ qr_read_image }}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;">
+          {% else %}
+            <span class="small-muted">Uploaded image preview</span>
+          {% endif %}
+        </div>
+        <div id="readResultData">
+          {% if qr_read_data %}
+          <div class="url-box mt-3">{{ qr_read_data }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -537,6 +743,16 @@ select option{
   </div>
 </div>
 
+<div class="gradient-background">
+        <div class="gradient-sphere sphere-1"></div>
+        <div class="gradient-sphere sphere-2"></div>
+        <div class="gradient-sphere sphere-3"></div>
+        <div class="glow"></div>
+        <div class="grid-overlay"></div>
+        <div class="noise-overlay"></div>
+        <div class="particles-container" id="particles-container"></div>
+</div>
+
 <!-- Modal (open when 3-dots clicked) -->
 <div id="modalBackdrop" class="modal-backdrop">
   <div class="modal">
@@ -582,6 +798,120 @@ select option{
 </div>
 
 <script>
+ // Create particle effect
+        const particlesContainer = document.getElementById('particles-container');
+        const particleCount = 80;
+        
+        // Create particles
+        for (let i = 0; i < particleCount; i++) {
+            createParticle();
+        }
+        
+        function createParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            
+            // Random size (small)
+            const size = Math.random() * 3 + 1;
+            particle.style.width = `${size}px`;
+            particle.style.height = `${size}px`;
+            
+            // Initial position
+            resetParticle(particle);
+            
+            particlesContainer.appendChild(particle);
+            
+            // Animate
+            animateParticle(particle);
+        }
+        
+        function resetParticle(particle) {
+            // Random position
+            const posX = Math.random() * 100;
+            const posY = Math.random() * 100;
+            
+            particle.style.left = `${posX}%`;
+            particle.style.top = `${posY}%`;
+            particle.style.opacity = '0';
+            
+            return {
+                x: posX,
+                y: posY
+            };
+        }
+        
+        function animateParticle(particle) {
+            // Initial position
+            const pos = resetParticle(particle);
+            
+            // Random animation properties
+            const duration = Math.random() * 10 + 10;
+            const delay = Math.random() * 5;
+            
+            // Animate with GSAP-like timing
+            setTimeout(() => {
+                particle.style.transition = `all ${duration}s linear`;
+                particle.style.opacity = Math.random() * 0.3 + 0.1;
+                
+                // Move in a slight direction
+                const moveX = pos.x + (Math.random() * 20 - 10);
+                const moveY = pos.y - Math.random() * 30; // Move upwards
+                
+                particle.style.left = `${moveX}%`;
+                particle.style.top = `${moveY}%`;
+                
+                // Reset after animation completes
+                setTimeout(() => {
+                    animateParticle(particle);
+                }, duration * 1000);
+            }, delay * 1000);
+        }
+        
+        // Mouse interaction
+        document.addEventListener('mousemove', (e) => {
+            // Create particles at mouse position
+            const mouseX = (e.clientX / window.innerWidth) * 100;
+            const mouseY = (e.clientY / window.innerHeight) * 100;
+            
+            // Create temporary particle
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            
+            // Small size
+            const size = Math.random() * 4 + 2;
+            particle.style.width = `${size}px`;
+            particle.style.height = `${size}px`;
+            
+            // Position at mouse
+            particle.style.left = `${mouseX}%`;
+            particle.style.top = `${mouseY}%`;
+            particle.style.opacity = '0.6';
+            
+            particlesContainer.appendChild(particle);
+            
+            // Animate outward
+            setTimeout(() => {
+                particle.style.transition = 'all 2s ease-out';
+                particle.style.left = `${mouseX + (Math.random() * 10 - 5)}%`;
+                particle.style.top = `${mouseY + (Math.random() * 10 - 5)}%`;
+                particle.style.opacity = '0';
+                
+                // Remove after animation
+                setTimeout(() => {
+                    particle.remove();
+                }, 2000);
+            }, 10);
+            
+            // Subtle movement of gradient spheres
+            const spheres = document.querySelectorAll('.gradient-sphere');
+            const moveX = (e.clientX / window.innerWidth - 0.5) * 5;
+            const moveY = (e.clientY / window.innerHeight - 0.5) * 5;
+            
+            spheres.forEach(sphere => {
+                const currentTransform = getComputedStyle(sphere).transform;
+                sphere.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            });
+        })
 /* ---------- Platform blocks ---------- */
 let shown = 1;
 function showNext() {
@@ -859,8 +1189,106 @@ document.getElementById('qrForm').addEventListener('submit', function(){
 
 /* small helper to set server default for JS templating safety */
 
-/* Download function for pywebview */
+function escapeHTML(str) {
+    return str.replace(/[&<>"']/g, function(match) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[match];
+    });
+}
 
+function toggleReadMode() {
+    const genDiv = document.getElementById('genMode');
+    const readDiv = document.getElementById('readMode');
+    if (genDiv.classList.contains('hidden')) {
+        // switching back to gen
+        genDiv.classList.remove('hidden');
+        readDiv.classList.add('hidden');
+        document.getElementById('pageTitle').textContent = 'QR Code Data Encoder';
+        document.getElementById('toggleBtn').textContent = 'Read QR Code';
+    } else {
+        // switching to read
+        genDiv.classList.add('hidden');
+        readDiv.classList.remove('hidden');
+        document.getElementById('pageTitle').textContent = 'QR Code Reader';
+        document.getElementById('toggleBtn').textContent = 'Generate QR Code';
+    }
+}
+
+let stream = null;
+
+function startCamera() {
+    if (typeof jsQR === 'undefined') {
+        alert('QR scanning library not loaded. Please refresh the page.');
+        return;
+    }
+    document.getElementById('cameraSection').classList.remove('hidden');
+    document.getElementById('uploadSection').classList.add('hidden');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Clear previous results
+    document.getElementById('readResultData').innerHTML = '';
+    const previewBox = document.querySelector('#readMode .flex.flex-col.items-center > div:first-child');
+    if (previewBox) {
+        previewBox.innerHTML = '<span class="small-muted">Uploaded image preview</span>';
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(function(mediaStream) {
+            stream = mediaStream;
+            video.srcObject = mediaStream;
+            video.play();
+            function scan() {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    if (code && code.data) {
+                        // Display the result
+                        const resultContainer = document.getElementById('readResultData');
+                        resultContainer.innerHTML = `<div class="url-box mt-3">${escapeHTML(code.data)}</div>`;
+                        stopCamera();
+                        return; // Stop scanning
+                    }
+                }
+                if(stream) { // only continue scanning if stream is active
+                    requestAnimationFrame(scan);
+                }
+            }
+            scan();
+        })
+        .catch(function(err) {
+            alert('Camera access denied: ' + err.message);
+        });
+}
+
+function stopCamera() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+    document.getElementById('cameraSection').classList.add('hidden');
+    document.getElementById('uploadSection').classList.remove('hidden');
+}
+
+function toggleUpload() {
+    document.getElementById('uploadSection').classList.remove('hidden');
+    document.getElementById('cameraSection').classList.add('hidden');
+}
+
+/* Download function for pywebview */
+(function() {
+    const initialMode = '{{ initial_mode }}';
+    if (initialMode === 'read') {
+        toggleReadMode();
+    }
+})();
 </script>
 
 </body>
@@ -877,7 +1305,7 @@ def index():
     global saved_input_data, last_qr_data
     last_qr_data = None
     saved_input_data = {
-        "name": "Abilash",
+        "name": "",
         "message": "Check out my profile!",
         "copy_data": "",
         "image_url": "",
@@ -890,7 +1318,8 @@ def index():
         "box_size": "",
         "error_level": ""
     }
-    return render_template_string(HTML_TEMPLATE, qr_image=None, saved_data=saved_input_data, DEFAULT_QR_BOX_SIZE=DEFAULT_QR_BOX_SIZE)
+    bg_style = 'url("/bg") cover center no-repeat' if os.path.exists(USER_BG_PATH) else ''
+    return render_template_string(HTML_TEMPLATE, qr_image=None, saved_data=saved_input_data, DEFAULT_QR_BOX_SIZE=DEFAULT_QR_BOX_SIZE, qr_read_data=None, bg_style=bg_style, qr_read_image=None, initial_mode='generate')
 
 @app.route('/generate_qr', methods=['POST'])
 def generate_qr():
@@ -975,38 +1404,90 @@ def generate_qr():
     buf.seek(0)
     qr_b64 = base64.b64encode(buf.read()).decode()
 
+    bg_style = 'url("/bg") cover center no-repeat' if os.path.exists(USER_BG_PATH) else ''
     return render_template_string(HTML_TEMPLATE,
         qr_image=qr_b64,
         display_url=urllib.parse.unquote(encoded_url),
         saved_data=saved_input_data,
-        DEFAULT_QR_BOX_SIZE=DEFAULT_QR_BOX_SIZE
+        DEFAULT_QR_BOX_SIZE=DEFAULT_QR_BOX_SIZE,
+        qr_read_data=None,
+        bg_style=bg_style,
+        initial_mode='generate',
+        qr_read_image=None
     )
 # In last_QR_App.py
 @app.route('/download_qr', methods=['GET'])
 def download_qr():
     global last_qr_data
-    
+
     if last_qr_data is None:
         return "No QR code generated yet.", 404
 
+    # Regenerate the QR image since last_qr_data is the URL string
+    encoded_url = last_qr_data
+
+    # Recreate the QR code
+    qr = qrcode.QRCode(box_size=DEFAULT_QR_BOX_SIZE, error_correction=qrcode.constants.ERROR_CORRECT_L)
+    qr.add_data(encoded_url)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+    final_card = add_custom_graphics(qr_img, saved_input_data.get("custom_text",""))
+
     buffer = io.BytesIO()
-    last_qr_data.save(buffer, format="PNG")
+    final_card.save(buffer, format="PNG")
     buffer.seek(0)
-    
+
     # Use the saved data's name for the filename
-    filename = f"{saved_input_data.get('name', 'qrcode').replace(' ', '_')}_qr.png" 
+    filename = f"{saved_input_data.get('name', 'qrcode').replace(' ', '_')}_qr.png"
 
     return send_file(
         buffer,
         mimetype='image/png',
         as_attachment=True,
-        download_name=filename # Pass the filename here
+        download_name=filename
     )
+
+@app.route('/read_qr', methods=['POST'])
+def read_qr():
+    b64_img = None
+    try:
+        if 'file' not in request.files:
+            raise ValueError("No file provided")
+        file = request.files['file']
+        if file.filename == '':
+            raise ValueError("No file selected")
+
+        image_bytes = file.stream.read()
+        file.stream.seek(0)
+        b64_img = base64.b64encode(image_bytes).decode('utf-8')
+        
+        image = Image.open(io.BytesIO(image_bytes))
+        decoded_objects = pyzbar.decode(image)
+        data = decoded_objects[0].data.decode('utf-8') if decoded_objects else "No QR code detected in the image."
+    except Exception as e:
+        data = f"Error: {str(e)}"
+    
+    bg_style = 'url("/bg") cover center no-repeat' if os.path.exists(USER_BG_PATH) else ''
+    return render_template_string(HTML_TEMPLATE,
+        qr_image=None,
+        display_url=None,
+        saved_data=saved_input_data,
+        qr_read_data=data,
+        DEFAULT_QR_BOX_SIZE=DEFAULT_QR_BOX_SIZE,
+        bg_style=bg_style,
+        initial_mode='read',
+        qr_read_image=b64_img
+    )
+
+@app.route('/bg')
+def bg():
+    if os.path.exists(USER_BG_PATH):
+        return send_file(USER_BG_PATH, mimetype='image/png')
+    return 'Background not found', 404
 
 # ----------------------------------------------------------------------------------------------------
 
 # For web deployment:
 if __name__ == "__main__":
-    # The host/port will be set by the deployment environment, 
-    # but keep it like this for local testing before deployment
     app.run(debug=True)
